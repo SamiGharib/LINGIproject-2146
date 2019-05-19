@@ -16,112 +16,80 @@ AUTOSTART_PROCESSES(&root_node_process);
 #define MAX_CHILDREN 10
 // number of retransmissions in reliable unicast
 #define RETRANSMISSION 5
-// periodically send keep alive messages to children and parent nodes
-#define KEEP_ALIVE_TIME 15
-// periodically check for time outs
-#define KEEP_ALIVE_TIME_OUT 45
+// duration after which a node is considered as disconnected
+#define TIME_OUT 45
 /*---------------------------------------------------------------------------*/
+
 
 /* predefined messages that will be exchanged between nodes */
 // we accept to be the parent of a node
-static const char *IS_PARENT = "P";
-// we search for a node to be our parent
-static char *SEARCH_PARENT = "S";
+static char DIO[] = "O0";
 // the child node is still alive
-static char *CHILD_ALIVE = "C";
-// the parent node is still alive
-static char *PARENT_ALIVE = "A";
-/*---------------------------------------------------------------------------*/
-
-/* Timers */
-// if this timer expires the corresponding child node is not alive anymore
-struct timer children_alive[MAX_CHILDREN];
-// periodically send alives messages to children and parent node
-struct timer this_alive;
+static char DAO[] = "A";
 /*---------------------------------------------------------------------------*/
 
 /* Rime addresses */
 // list of all children nodes
 static linkaddr_t children_nodes[MAX_CHILDREN];
-// the address of this node
-static linkaddr_t this_node;
 /*---------------------------------------------------------------------------*/
 
-/* Rime structures */
-// structure for runicast
-static struct runicast_conn runicast;
-// structure for broadcast
+/* Timers */
+// a timer associated to each child
+struct timer children_timer[MAX_CHILDREN];
+/*---------------------------------------------------------------------------*/
+
 static struct broadcast_conn broadcast;
-/*---------------------------------------------------------------------------*/
+static struct unicast_conn unicast;
 
-// what to do when a broadcast message is received
-static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from)
+static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
 {
+  printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
+  // extract the message
+  char *message = (char *)packetbuf_dataptr();
+  // we got a new child node
 
-  printf("broadcast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
-  // extract message
-  char *message = strtok((char *)packetbuf_dataptr()," ");
-  printf("The message is: %s\n", message);
+  if(strcmp(message, DAO) == 0) {
 
-  // a node searches for a parent
-  if(strcmp(message, SEARCH_PARENT) == 0) {
-    // search for an empty space
+    // check if this node is already a child of us
+    int is_child = 0;
     int i;
-    for(i=0; i < MAX_CHILDREN; i++) {
-    if(linkaddr_cmp(&(children_nodes[i]), &linkaddr_null) != 0) {
 
-        // create the new child
-        linkaddr_t new_child;
-        new_child.u8[0] = from -> u8[0];
-        new_child.u8[1] = from -> u8[1];
-        children_nodes[i] = new_child;
-        // Send a runicast packet to the broadcasting node
-        packetbuf_copyfrom(IS_PARENT, sizeof(&IS_PARENT));
-        runicast_send(&runicast, from, RETRANSMISSION);
-        // create a timer for the new child node
-        timer_set(&(children_alive[i]), KEEP_ALIVE_TIME_OUT*CLOCK_SECOND);
-        // need to break here
+    for(i=0; i < MAX_CHILDREN; i++) {
+      if(linkaddr_cmp(&(children_nodes[i]), from) != 0) {
+        is_child = 1;
+        //printf("restarted timer for existing child: %d\n", i);
+        timer_restart(&(children_timer[i]));
         break;
       }
     }
-  }
-}
 
-static void
-sent_runicast(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions)
-{
-  printf("runicast message sent to %d.%d, retransmissions %d\n",
-	 to->u8[0], to->u8[1], retransmissions);
-}
-static void
-timedout_runicast(struct runicast_conn *c, const linkaddr_t *to, uint8_t retransmissions)
-{
-  printf("runicast message timed out when sending to %d.%d, retransmissions %d\n",
-	 to->u8[0], to->u8[1], retransmissions);
-}
+    // else this becomes a new child
+    if(is_child == 0) {
 
-// what to do when a unicast message is received
-static void runicast_recv(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno)
-{
-
-  printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
-  // extract message
-  char *message = strtok((char *)packetbuf_dataptr()," ");
-
-  // a keep alive message was received from a children node
-  if(strcmp(message, CHILD_ALIVE) == 0) {
-    // reset the keep alive timer
-    int i;
-    for(i=0; i < MAX_CHILDREN; i++) {
-      if(linkaddr_cmp(&(children_nodes[i]), from) != 0) {
-        timer_restart(&(children_alive[i]));
+      for(i=0; i < MAX_CHILDREN; i++) {
+        if(linkaddr_cmp(&(children_nodes[i]), &linkaddr_null) != 0) {
+          // create the new child
+          linkaddr_t new_node;
+          new_node.u8[0] = from -> u8[0];
+          new_node.u8[1] = from -> u8[1];
+          children_nodes[i] = new_node;
+          //printf("created new child node: %d\n", i);
+          timer_restart(&(children_timer[i]));
+          break;
+        }
       }
     }
   }
 }
 
+
+static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from) {
+  //printf("broadcast message received from %d.%d -> %s\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
+}
+
+
 // constructs for broadcast and unicast
-static const struct runicast_callbacks runicast_call = {runicast_recv, sent_runicast, timedout_runicast};
+static const struct unicast_callbacks unicast_call = {unicast_recv};
 static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
 
 /*---------------------------------------------------------------------------*/
@@ -129,51 +97,46 @@ PROCESS_THREAD(root_node_process, ev, data)
 {
   static struct etimer et;
 
+
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
-  PROCESS_EXITHANDLER(runicast_close(&runicast));
+  PROCESS_EXITHANDLER(unicast_close(&unicast));
 
   PROCESS_BEGIN();
   clock_init();
 
-  timer_set(&this_alive, KEEP_ALIVE_TIME*CLOCK_SECOND);
-
-  // set the nodes rime addr
-  this_node.u8[0] = linkaddr_node_addr.u8[0];
-  this_node.u8[1] = linkaddr_node_addr.u8[1];
-
-  // counter variable used in for loops
+  // for loop counter
   int i;
+  for(i=0;i < MAX_CHILDREN ; i++) {
+    timer_set(&(children_timer[i]), TIME_OUT*CLOCK_SECOND);
+  }
 
   // Set up an identified best-effort broadcast connection
   broadcast_open(&broadcast, 129, &broadcast_call);
   // Set up an identified reliable unicast connection
-  runicast_open(&runicast, 144, &runicast_call);
+  unicast_open(&unicast, 136, &unicast_call);
 
+
+  // Main loop
   while(1) {
 
-    etimer_set(&et, CLOCK_SECOND * 4 + random_rand() % (CLOCK_SECOND*4));
+    // Delay 2-4 seconds
+    etimer_set(&et, CLOCK_SECOND * 6 + random_rand() % (CLOCK_SECOND * 6));
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
-    if(timer_expired(&this_alive)) {
-      // check if children nodes still alive
-      for(i=0; i < MAX_CHILDREN; i++) {
-        // send a parent alive message to each children
-        if(linkaddr_cmp(&(children_nodes[i]), &linkaddr_null) == 0) {
-          packetbuf_copyfrom(PARENT_ALIVE, sizeof(&PARENT_ALIVE));
-          runicast_send(&runicast, &(children_nodes[i]), RETRANSMISSION);
-        }
-      }
-      timer_restart(&this_alive);
-    }
+    // send a DIO broadcast message
+    packetbuf_clear();
+    packetbuf_copyfrom(DIO, sizeof(&DIO));
+    broadcast_send(&broadcast);
 
-    // check if children nodes still alive
-    int i;
-    for(i=0; i < MAX_CHILDREN; i++) {
-      if(timer_expired(&(children_alive[i]))) {
+    // check if a child disconnected
+    for(i=0;i<MAX_CHILDREN;i++){
+      if(timer_expired(&(children_timer[i]))){
         children_nodes[i] = linkaddr_null;
       }
     }
 
   }
+
   PROCESS_END();
 }
+/*---------------------------------------------------------------------------*/
