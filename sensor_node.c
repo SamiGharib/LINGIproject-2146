@@ -8,6 +8,8 @@
 #include <string.h>
 #include "sys/timer.h"
 #include <limits.h>
+#include "dev/temperature-sensor.h"
+
 
 PROCESS(sensor_node_process, "Sensor node");
 AUTOSTART_PROCESSES(&sensor_node_process);
@@ -19,13 +21,15 @@ AUTOSTART_PROCESSES(&sensor_node_process);
 #define RETRANSMISSION 5
 // duration after which a node is considered as disconnected
 #define TIME_OUT 45
+// time to wait before sending new sensor data
+#define DATA_TIME 30
 /*---------------------------------------------------------------------------*/
 
 
 /* predefined messages that will be exchanged between nodes */
-// we accept to be the parent of a node
+// broadcast message -> inform other nodes of the existance of this node
 static char DIO[] = "O?";
-// the child node is still alive
+// unicast message -> inform the parent node that we are still alive
 static char DAO[] = "A";
 /*---------------------------------------------------------------------------*/
 
@@ -38,19 +42,47 @@ static linkaddr_t parent_node;
 /* Timers */
 // a timer associated to each child
 static struct timer children_timer[MAX_CHILDREN];
+// a timer associated to the parent node
 static struct timer parent_timer;
+// a timer associated to the transmission of data
+static struct timer data_timer;
 /*---------------------------------------------------------------------------*/
 
+/* Other global variables */
+// check if we have a parent node currently
 static int has_parent = 0;
+// the rank of this node
 static int this_rank = INT_MAX;
+// two possible configuration -> send data on change or periodically
+typedef enum { on_change, periodically } config;
+// by default we send data periodically
+static config current_config = periodically;
 
 
+/* Structures for broadcast / unicast */
 static struct broadcast_conn broadcast;
 static struct unicast_conn unicast;
+static struct runicast_conn runicast;
+
+static void send_temperature() {
+  // get temperature value
+  unsigned int temp = temperature_sensor.value(0);
+  int first_digit = temp/10;
+  int second_digit = temp - (temp/10)*10;
+
+  // create message
+  char msg[9];
+  sprintf(msg, "%d.%d/T/%d.%d", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1], first_digit, second_digit);
+  // send message via runicast
+
+  packetbuf_clear();
+  packetbuf_copyfrom(msg, strlen(msg));
+  runicast_send(&runicast, &parent_node, RETRANSMISSION);
+}
 
 
 static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from) {
-  printf("broadcast message received from %d.%d -> %s\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
+  //printf("broadcast message received from %d.%d -> %s\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
   // this node has no parent yet
   char *message = (char *)packetbuf_dataptr();
   // we received a DIO message
@@ -59,7 +91,6 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from) {
     int rank = atoi(&message[1]);
     // shortest hop rule
     if(rank+1 < this_rank) {
-      printf("new parent according to shortest hop rule\n");
       has_parent = 1;
       linkaddr_t new_node;
       new_node.u8[0] = from -> u8[0];
@@ -78,7 +109,7 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from) {
 
 static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
 {
-  printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
+  //printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
   // extract the message
   char *message = (char *)packetbuf_dataptr();
   int i;
@@ -114,9 +145,20 @@ static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
   }
 }
 
+static void runicast_recv(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno){
+  //printf("runicast message received from %d.%d -> %s\n", from->u8[0], from->u8[1], (char *) packetbuf_dataptr());
+
+  char *message = (char *)packetbuf_dataptr();
+
+  packetbuf_clear();
+  packetbuf_copyfrom(message, strlen(message));
+  runicast_send(&runicast, &parent_node, RETRANSMISSION);
+}
+
 // constructs for broadcast and unicast
 static const struct unicast_callbacks unicast_call = {unicast_recv};
 static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
+static const struct runicast_callbacks runicast_call = {runicast_recv};
 /*---------------------------------------------------------------------------*/
 
 PROCESS_THREAD(sensor_node_process, ev, data)
@@ -125,6 +167,7 @@ PROCESS_THREAD(sensor_node_process, ev, data)
 
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
   PROCESS_EXITHANDLER(unicast_close(&unicast));
+  PROCESS_EXITHANDLER(runicast_close(&runicast));
 
   PROCESS_BEGIN();
   clock_init();
@@ -132,6 +175,7 @@ PROCESS_THREAD(sensor_node_process, ev, data)
   // for loop counter
   int i;
   timer_set(&parent_timer, TIME_OUT*CLOCK_SECOND);
+  timer_set(&data_timer, DATA_TIME*CLOCK_SECOND);
   for(i=0;i < MAX_CHILDREN ; i++) {
     timer_set(&(children_timer[i]), TIME_OUT*CLOCK_SECOND);
   }
@@ -140,7 +184,7 @@ PROCESS_THREAD(sensor_node_process, ev, data)
   broadcast_open(&broadcast, 129, &broadcast_call);
   // Set up an identified reliable unicast connection
   unicast_open(&unicast, 136, &unicast_call);
-
+  runicast_open(&runicast, 144, &runicast_call);
 
   // Main loop
   while(1) {
@@ -149,25 +193,36 @@ PROCESS_THREAD(sensor_node_process, ev, data)
     etimer_set(&et, CLOCK_SECOND * 6 + random_rand() % (CLOCK_SECOND * 6));
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
-    if(has_parent == 1) {
+    if(has_parent == 0) {
+      printf("This node has no parent\n");
+    }
+    else {
       // send a DIO broadcast message
       packetbuf_clear();
       char tmp = (char)(this_rank + '0');
       DIO[1] = tmp;
-      packetbuf_copyfrom(DIO, sizeof(&DIO));
+      packetbuf_copyfrom(DIO, strlen(DIO));
       broadcast_send(&broadcast);
       // send a DIA unicast message to parent node
       packetbuf_clear();
-      packetbuf_copyfrom(DAO, sizeof(&DAO));
+      packetbuf_copyfrom(DAO, strlen(DAO));
       unicast_send(&unicast, &parent_node);
+
+      // check if there is some data to transmit
+      if(current_config == periodically) {
+        if(timer_expired(&data_timer)) {
+          send_temperature();
+          timer_restart(&data_timer);
+        }
+      }
+      else {
+
+      }
     }
-    if(has_parent == 0) {
-      printf("This node has no parent\n");
-    }
+
 
     // no parent anymore
     if(timer_expired(&parent_timer)) {
-      printf("PARENT TIMER EXPIRED!!!\n");
       has_parent = 0;
       parent_node = linkaddr_null;
       this_rank = INT_MAX;
