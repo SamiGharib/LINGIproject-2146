@@ -27,8 +27,6 @@ AUTOSTART_PROCESSES(&sensor_node_process);
 
 
 /* predefined messages that will be exchanged between nodes */
-// broadcast message -> inform other nodes of the existance of this node
-static char DIO[] = "O?";
 // unicast message -> inform the parent node that we are still alive
 static char DAO[] = "A";
 /*---------------------------------------------------------------------------*/
@@ -53,10 +51,10 @@ static struct timer data_timer;
 static int has_parent = 0;
 // the rank of this node
 static int this_rank = INT_MAX;
-// two possible configuration -> send data on change or periodically
-typedef enum { on_change, periodically } config;
 // by default we send data periodically
-static config current_config = periodically;
+static char config = 'C';
+
+static int prev_temp[2] = {1 , 1};
 
 
 /* Structures for broadcast / unicast */
@@ -64,20 +62,42 @@ static struct broadcast_conn broadcast;
 static struct unicast_conn unicast;
 static struct runicast_conn runicast;
 
-static void send_temperature() {
+static void send_temperature(char config) {
+
   // get temperature value
   unsigned int temp = temperature_sensor.value(0);
   int first_digit = temp/10;
   int second_digit = temp - (temp/10)*10;
 
-  // create message
-  char msg[9];
-  sprintf(msg, "%d.%d/T/%d.%d", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1], first_digit, second_digit);
-  // send message via runicast
+  // configuration -> send periodically
+  if(config == 'P') {
+    if(timer_expired(&data_timer)) {
+      // create message
+      char msg[9];
+      sprintf(msg, "%d.%d/T/%d.%d", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1], first_digit, second_digit);
+      // send message via runicast
+      packetbuf_clear();
+      packetbuf_copyfrom(msg, strlen(msg));
+      runicast_send(&runicast, &parent_node, RETRANSMISSION);
+    }
+  }
+  // configuration -> send on change
+  else {
+    // send only if temperature changed
+    if(first_digit != prev_temp[0] || second_digit != prev_temp[1]) {
+      prev_temp[0] = first_digit;
+      prev_temp[1] = second_digit;
+      // create message
+      char msg[9];
+      sprintf(msg, "%d.%d/T/%d.%d", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1], first_digit, second_digit);
+      // send message via runicast
+      packetbuf_clear();
+      packetbuf_copyfrom(msg, strlen(msg));
+      runicast_send(&runicast, &parent_node, RETRANSMISSION);
+    }
 
-  packetbuf_clear();
-  packetbuf_copyfrom(msg, strlen(msg));
-  runicast_send(&runicast, &parent_node, RETRANSMISSION);
+  }
+
 }
 
 
@@ -89,6 +109,7 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from) {
   if(message[0] == 'O') {
 
     int rank = atoi(&message[1]);
+    config = message[2];
     // shortest hop rule
     if(rank+1 < this_rank) {
       has_parent = 1;
@@ -199,9 +220,9 @@ PROCESS_THREAD(sensor_node_process, ev, data)
     else {
       // send a DIO broadcast message
       packetbuf_clear();
-      char tmp = (char)(this_rank + '0');
-      DIO[1] = tmp;
-      packetbuf_copyfrom(DIO, strlen(DIO));
+      char msg[3];
+      sprintf(msg, "O%d%c", this_rank, config);
+      packetbuf_copyfrom(msg, strlen(msg));
       broadcast_send(&broadcast);
       // send a DIA unicast message to parent node
       packetbuf_clear();
@@ -209,15 +230,8 @@ PROCESS_THREAD(sensor_node_process, ev, data)
       unicast_send(&unicast, &parent_node);
 
       // check if there is some data to transmit
-      if(current_config == periodically) {
-        if(timer_expired(&data_timer)) {
-          send_temperature();
-          timer_restart(&data_timer);
-        }
-      }
-      else {
 
-      }
+      send_temperature(config);
     }
 
 

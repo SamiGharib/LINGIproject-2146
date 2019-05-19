@@ -22,8 +22,6 @@ AUTOSTART_PROCESSES(&root_node_process);
 
 
 /* predefined messages that will be exchanged between nodes */
-// broadcast message -> inform other nodes of the existance of this node
-static char DIO[] = "O0";
 // unicast message -> inform the parent node that we are still alive
 static char DAO[] = "A";
 /*---------------------------------------------------------------------------*/
@@ -37,6 +35,9 @@ static linkaddr_t children_nodes[MAX_CHILDREN];
 // a timer associated to each child
 struct timer children_timer[MAX_CHILDREN];
 /*---------------------------------------------------------------------------*/
+
+static const int rank = 0;
+static char config = 'P';
 
 static struct broadcast_conn broadcast;
 static struct unicast_conn unicast;
@@ -136,9 +137,11 @@ PROCESS_THREAD(root_node_process, ev, data)
     etimer_set(&et, CLOCK_SECOND * 6 + random_rand() % (CLOCK_SECOND * 6));
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
+    char msg[3];
+    sprintf(msg, "O%d%c", rank, config);
     // send a DIO broadcast message
     packetbuf_clear();
-    packetbuf_copyfrom(DIO, strlen(DIO));
+    packetbuf_copyfrom(msg, strlen(msg));
     broadcast_send(&broadcast);
 
     // check if a child disconnected
