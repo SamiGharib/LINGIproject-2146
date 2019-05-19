@@ -11,70 +11,104 @@
 PROCESS(root_node_process, "Root node");
 AUTOSTART_PROCESSES(&root_node_process);
 
-/* definition of macros */
-// maximum number of allowed children nodes
+/********************************************//**
+*  MACRO DEFINITIONS
+***********************************************/
+
+// maximum number of supported children nodes
 #define MAX_CHILDREN 10
 // number of retransmissions in reliable unicast
 #define RETRANSMISSION 5
 // duration after which a node is considered as disconnected
 #define TIME_OUT 45
-/*---------------------------------------------------------------------------*/
 
 
-/* predefined messages that will be exchanged between nodes */
-// unicast message -> inform the parent node that we are still alive
-static char DAO[] = "A";
-/*---------------------------------------------------------------------------*/
+/********************************************//**
+*  CONSTANT DEFINITIONS
+***********************************************/
 
-/* Rime addresses */
+// message used to tell the parent node that the node is still alive
+static const char ALIVE[] = "A";
+// the rank of the root node
+static const int rank = 0;
+
+/********************************************//**
+*  RIME ADDRESSES
+***********************************************/
+
 // list of all children nodes
 static linkaddr_t children_nodes[MAX_CHILDREN];
-/*---------------------------------------------------------------------------*/
+// reference to this node
+static linkaddr_t this_node;
 
-/* Timers */
-// a timer associated to each child
-struct timer children_timer[MAX_CHILDREN];
-/*---------------------------------------------------------------------------*/
+/********************************************//**
+*  TIMERS
+***********************************************/
 
-static const int rank = 0;
+// a timer associated to each child node
+static struct timer children_timer[MAX_CHILDREN];
+
+/********************************************//**
+*  Other global variables
+***********************************************/
+
+// the current configuration
 static char config = 'P';
+
+/********************************************//**
+*  Structures for broadcast / (r)unicast
+***********************************************/
 
 static struct broadcast_conn broadcast;
 static struct unicast_conn unicast;
 static struct runicast_conn runicast;
 
+/********************************************//**
+*  Function definitions
+***********************************************/
 
+/**
+* This function is called upon a received runicast packet. Reliable unicast
+* is only used to send sensor data. Upon reception of such a packet, is has
+* to be forwarded to the gateway.
+* @ param  c     : the unicast structure
+* @ param  from  : the address of the unicasting node
+* @ return /
+*/
 static void runicast_recv(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno){
   printf("runicast message received from %d.%d -> %s\n", from->u8[0], from->u8[1], (char *) packetbuf_dataptr());
-
   // TODO send it to the gateway
 }
 
+/**
+* This function is called upon a received unicast packet. It uses the
+* information in this packet to determin if the sending node is or wants
+* to be our child
+* @ param  c     : the unicast structure
+* @ param  from  : the address of the unicasting node
+* @ return /
+*/
 static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
 {
   printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
   // extract the message
   char *message = (char *)packetbuf_dataptr();
   // we got a new child node
-
-  if(strcmp(message, DAO) == 0) {
-
+  if(strcmp(message, ALIVE) == 0) {
     // check if this node is already a child of us
     int is_child = 0;
     int i;
-
     for(i=0; i < MAX_CHILDREN; i++) {
+      // the node is already a child node -> restart timer
       if(linkaddr_cmp(&(children_nodes[i]), from) != 0) {
         is_child = 1;
-        //printf("restarted timer for existing child: %d\n", i);
         timer_restart(&(children_timer[i]));
         break;
       }
     }
-
-    // else this becomes a new child
+    // else this becomes a new child node
     if(is_child == 0) {
-
+      // check if we have space left
       for(i=0; i < MAX_CHILDREN; i++) {
         if(linkaddr_cmp(&(children_nodes[i]), &linkaddr_null) != 0) {
           // create the new child
@@ -82,7 +116,6 @@ static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
           new_node.u8[0] = from -> u8[0];
           new_node.u8[1] = from -> u8[1];
           children_nodes[i] = new_node;
-          //printf("created new child node: %d\n", i);
           timer_restart(&(children_timer[i]));
           break;
         }
@@ -97,16 +130,22 @@ static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from) {
 }
 
 
-// constructs for broadcast and unicast
+/********************************************//**
+*  Broadcast / (R)unicast constructs
+***********************************************/
+
 static const struct unicast_callbacks unicast_call = {unicast_recv};
 static const struct broadcast_callbacks broadcast_call = {broadcast_recv};
 static const struct runicast_callbacks runicast_call = {runicast_recv};
 
-/*---------------------------------------------------------------------------*/
+/********************************************//**
+*  MAIN THREAD
+***********************************************/
+
 PROCESS_THREAD(root_node_process, ev, data)
 {
+  // timer used to wake up the node periodically
   static struct etimer et;
-
 
   PROCESS_EXITHANDLER(broadcast_close(&broadcast));
   PROCESS_EXITHANDLER(unicast_close(&unicast));
@@ -116,16 +155,21 @@ PROCESS_THREAD(root_node_process, ev, data)
   PROCESS_BEGIN();
   clock_init();
 
-  // for loop counter
+  // initialize all the timers
   int i;
   for(i=0;i < MAX_CHILDREN ; i++) {
     timer_set(&(children_timer[i]), TIME_OUT*CLOCK_SECOND);
   }
 
+  // set our id
+  this_node.u8[0] = linkaddr_node_addr.u8[0];
+  this_node.u8[1] = linkaddr_node_addr.u8[1];
+
   // Set up an identified best-effort broadcast connection
   broadcast_open(&broadcast, 129, &broadcast_call);
-  // Set up an identified reliable unicast connection
+  // Set up an identified unicast connection
   unicast_open(&unicast, 136, &unicast_call);
+  // Set up an identified reliable unicast connection
   runicast_open(&runicast, 144, &runicast_call);
 
 
@@ -137,9 +181,10 @@ PROCESS_THREAD(root_node_process, ev, data)
     etimer_set(&et, CLOCK_SECOND * 6 + random_rand() % (CLOCK_SECOND * 6));
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
+    // create the broadcast message
     char msg[3];
     sprintf(msg, "O%d%c", rank, config);
-    // send a DIO broadcast message
+    // send the broadcast message
     packetbuf_clear();
     packetbuf_copyfrom(msg, strlen(msg));
     broadcast_send(&broadcast);
@@ -150,7 +195,6 @@ PROCESS_THREAD(root_node_process, ev, data)
         children_nodes[i] = linkaddr_null;
       }
     }
-
   }
 
   PROCESS_END();
