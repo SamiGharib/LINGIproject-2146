@@ -24,10 +24,12 @@ public class MqttCallbackWithPrint implements MqttCallback{
     
     // Modified in order to print when a message has arrived and to track the topics still used
     public void messageArrived(String topic, MqttMessage mqttMessage) throws Exception {
-        
-      System.out.println(getName()+ " got message: " + mqttMessage.toString() + " with topic: " + topic);
+     
       if(getName().equals("Publisher") && !topics.contains(mqttMessage.toString())){
           topics.add(mqttMessage.toString());
+      }
+      else if(!getName().equals("Publisher")){
+          System.out.println(getName()+ " got message: " + mqttMessage.toString() + " with topic: " + topic);
       }
     }
 

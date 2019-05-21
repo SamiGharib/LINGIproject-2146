@@ -18,8 +18,8 @@ import org.eclipse.paho.client.mqttv3.MqttClient;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 
 public class Gateway {
-    public static final String SERIALDUMP_WINDOWS = "../contiki/tools/sky/serialdump-windows.exe";
-    public static final String SERIALDUMP_LINUX = "../contiki/tools/sky/serialdump-linux"; //See ex session with hardware
+    public static final String SERIALDUMP_WINDOWS = "/home/user/contiki/tools/sky/serialdump-windows.exe";
+    public static final String SERIALDUMP_LINUX = "/home/user/contiki/tools/sky/serialdump-linux"; //See ex session with hardware
     private Process serialDumpProcess;
     private ArrayList<String> topics;
     
@@ -62,7 +62,7 @@ public class Gateway {
                         if(data[1].equals("Temperature") || data[1].equals("Humidity")){
                             msg.setPayload(value.getBytes());
                             gateway.publish(topic, msg);
-                            System.out.println("Published to subcribers: "+line);
+                            //System.out.println("Published to subcribers: "+line);
                             callback.resetTopicsCount(topic); //Remove a topic from topics to be traeted once it has been sent in order to stop requiring when there is no subscriber
                         }
                         else{
@@ -119,7 +119,7 @@ public class Gateway {
                             String request = topics.get(i);
                             output.write(request);
                             output.flush();
-                            System.out.println(request + " has been sent to root node");
+                            //System.out.println(request + " has been sent to root node");
                         }                        
                         Thread.sleep(5000); // wait 5 seconds for count to refill
                     }
