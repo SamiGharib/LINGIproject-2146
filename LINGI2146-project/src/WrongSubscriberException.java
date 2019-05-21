@@ -12,6 +12,9 @@ class WrongSubscriberException extends Exception{
           //Wrong topic field
           System.out.println("Available Topics : \"Temperature\" and \"Humidity\"");
       }
+      else if(flag == 3){
+          System.out.println("You subscribed more than once to the same topic");
+      }
     
     
     

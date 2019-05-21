@@ -3,6 +3,7 @@ We reimplemented MqttCallbackin order to print when a message has been received 
 */
 
 import java.util.ArrayList;
+import java.util.Arrays;
 import org.eclipse.paho.client.mqttv3.MqttCallback;
 import org.eclipse.paho.client.mqttv3.MqttMessage;
 import org.eclipse.paho.client.mqttv3.IMqttDeliveryToken;
@@ -33,8 +34,10 @@ public class MqttCallbackWithPrint implements MqttCallback{
     public void deliveryComplete(IMqttDeliveryToken iMqttDeliveryToken) {
     }
     
-    public void resetTopicsCount(){
-        topics = new ArrayList<>();
+    public void resetTopicsCount(String topic){
+        if(topics.contains(topic)){
+            topics.remove(topic);
+        }
     }
     
     public ArrayList<String> getTopics(){

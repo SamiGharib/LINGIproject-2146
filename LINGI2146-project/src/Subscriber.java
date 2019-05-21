@@ -18,6 +18,11 @@ public class Subscriber {
             if(!test[1].equals("Temperature") && !test[1].equals("Humidity")){
                 throw new WrongSubscriberException(2);
             }
+            for(int j = 1; j<args.length; j++){
+                if(args[i].equals(args[j]) && i!=j){
+                    throw new WrongSubscriberException(3);
+                }
+            }
         }
         
         String subscriberName = args[0];
@@ -28,7 +33,7 @@ public class Subscriber {
         subscriber.setCallback(callback);
         subscriber.connect();
 
-        for(int i = 1; i<args.length-1;i++){
+        for(int i = 1; i<args.length;i++){
             subscriber.subscribe(args[i]);
         }
         try {
@@ -38,6 +43,7 @@ public class Subscriber {
                     msg = new MqttMessage();
                     msg.setPayload(args[i].getBytes());
                     subscriber.publish("Topic", msg);
+		    System.out.println(subscriberName + " published " + msg.toString());
                     Thread.sleep(2500);
                 }
             }

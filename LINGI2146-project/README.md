@@ -30,17 +30,3 @@ The transmission of sensor data relies on reliable unicast, since the delivery o
 #### Transmission of configuration data
 
 TODO
-
-
-### Gateway (Not tested yet) called by : java Gateway port (port = /dev/ttyUSB0)
-
-- Subscribers: Reads their requests (topics) via the broker which is already implemented in java (mqtt).(done via the MqttCallbackWithPrint)
-			   Forwards the datas (number value) from the root node to the Subscribers also via mqtt.(Thread readInput)
-				
-- Root node: Reads the datas received from root node via serial communication (serialdump-linux or windows) (Thread readInput)
-			 Forwards them requests from subscribers (nodeN/topic) and an option to indicate if a datas should be sent on change or periodically (O/P)(Thread writeOutput)
-				Example of message it receives : node1/Temperature/24
-
-
-
-### Subscribers called by : java Subscriber subscriberName nodeN/topic nodeM/topic ... (node/topic = topics to which it subscribes)

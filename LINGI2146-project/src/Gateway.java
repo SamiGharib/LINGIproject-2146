@@ -63,6 +63,7 @@ public class Gateway {
                             msg.setPayload(value.getBytes());
                             gateway.publish(topic, msg);
                             System.out.println("Published to subcribers: "+line);
+                            callback.resetTopicsCount(topic); //Remove a topic from topics to be traeted once it has been sent in order to stop requiring when there is no subscriber
                         }
                         else{
                             System.out.println("Wrong message received: "+line);
@@ -114,15 +115,12 @@ public class Gateway {
                 try {
                     while(true) {
                         topics = callback.getTopics();
-                        for(int i=1;i<=topics.size();i++){
+                        for(int i=0;i<topics.size();i++){
                             String request = topics.get(i);
                             output.write(request);
                             output.flush();
                             System.out.println(request + " has been sent to root node");
-                        }
-                        
-                        callback.resetTopicsCount();
-                        
+                        }                        
                         Thread.sleep(5000); // wait 5 seconds for count to refill
                     }
                 } catch (Exception e) {
