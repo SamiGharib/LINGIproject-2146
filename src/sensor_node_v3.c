@@ -3,7 +3,7 @@
 #include "dev/button-sensor.h"
 #include <stdio.h>
 #include <stdlib.h>
-#include "net/rime.h"
+#include "net/rime/rime.h"
 #include "random.h"
 #include <string.h>
 #include "sys/timer.h"
@@ -36,11 +36,11 @@ AUTOSTART_PROCESSES(&sensor_node_process);
 ***********************************************/
 
 // array of all the child nodes
-static rimeaddr_t children_nodes[MAX_INDEX][MAX_INDEX];
+static linkaddr_t children_nodes[MAX_INDEX][MAX_INDEX];
 // reference to the parent node
-static rimeaddr_t parent_node;
+static linkaddr_t parent_node;
 // reference to this node
-static rimeaddr_t this_node;
+static linkaddr_t this_node;
 
 
 /********************************************//**
@@ -91,7 +91,7 @@ static char tmp[5];
 
 struct history_entry {
   struct history_entry *next;
-  rimeaddr_t addr;
+  linkaddr_t addr;
   uint8_t seq;
 };
 LIST(history_table);
@@ -184,7 +184,7 @@ static void send_temperature(char config) {
         prev_temp[0] = first_digit;
         prev_temp[1] = second_digit;
         // create message with format <ID/channel/data>
-        sprintf(temp_msg, "%d.%d/T/%d.%d", rimeaddr_node_addr.u8[0], rimeaddr_node_addr.u8[1], first_digit, second_digit);
+        sprintf(temp_msg, "%d.%d/T/%d.%d", linkaddr_node_addr.u8[0], linkaddr_node_addr.u8[1], first_digit, second_digit);
         // send message via runicast to parent node
         packetbuf_clear();
         packetbuf_copyfrom(temp_msg, strlen(temp_msg));
@@ -204,7 +204,7 @@ static void send_temperature(char config) {
 * @ param  from  : the address of the broadcasting node
 * @ return /
 */
-static void broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from) {
+static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from) {
   //printf("broadcast message received from %d.%d -> %s\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
   // extract the message
   char *message = (char *)packetbuf_dataptr();
@@ -222,7 +222,7 @@ static void broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from) {
     if(rank+1 < this_rank) {
       // the broadcasting node becomes our new parent node
       has_parent = 1;
-      rimeaddr_t new_node;
+      linkaddr_t new_node;
       new_node.u8[0] = from -> u8[0];
       new_node.u8[1] = from -> u8[1];
       parent_node = new_node;
@@ -230,7 +230,7 @@ static void broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from) {
       timer_restart(&parent_timer);
     }
     // the message was sent from our parent node -> restart timer
-    else if (has_parent == 1 && rimeaddr_cmp(&parent_node, from) != 0) {
+    else if (has_parent == 1 && linkaddr_cmp(&parent_node, from) != 0) {
       timer_restart(&parent_timer);
     }
   }
@@ -244,7 +244,7 @@ static void broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from) {
 * @ param  from  : the address of the unicasting node
 * @ return /
 */
-static void unicast_recv(struct unicast_conn *c, const rimeaddr_t *from)
+static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
 {
   //printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
 
@@ -266,11 +266,11 @@ static void unicast_recv(struct unicast_conn *c, const rimeaddr_t *from)
   if(strcmp(token, "A") == 0) {
 
     // get the address of the sending node
-    rimeaddr_t child_node;
+    linkaddr_t child_node;
     child_node.u8[0] = from -> u8[0];
     child_node.u8[1] = from -> u8[1];
     // check if this node is already a child of us
-    if(rimeaddr_cmp(&(children_nodes[index1][index2]), &rimeaddr_null) != 0) {
+    if(linkaddr_cmp(&(children_nodes[index1][index2]), &linkaddr_null) != 0) {
       // the node is not a child node yet
       // create the new child
       children_nodes[index1][index2] = child_node;
@@ -300,11 +300,11 @@ static void unicast_recv(struct unicast_conn *c, const rimeaddr_t *from)
 * @ param  from  : the address of the unicasting node
 * @ return /
 */
-static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8_t seqno){
+static void runicast_recv(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno){
 
   struct history_entry *e = NULL;
   for(e = list_head(history_table); e != NULL; e = e->next) {
-    if(rimeaddr_cmp(&e->addr, from)) {
+    if(linkaddr_cmp(&e->addr, from)) {
       break;
     }
   }
@@ -314,7 +314,7 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
     if(e == NULL) {
       e = list_chop(history_table); /* Remove oldest at full history */
     }
-    rimeaddr_copy(&e->addr, from);
+    linkaddr_copy(&e->addr, from);
     e->seq = seqno;
     list_push(history_table, e);
   } else {
@@ -403,8 +403,8 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
     }
 
     // set our id
-    this_node.u8[0] = rimeaddr_node_addr.u8[0];
-    this_node.u8[1] = rimeaddr_node_addr.u8[1];
+    this_node.u8[0] = linkaddr_node_addr.u8[0];
+    this_node.u8[1] = linkaddr_node_addr.u8[1];
 
     // Set up an identified best-effort broadcast connection
     broadcast_open(&broadcast, 129, &broadcast_call);
@@ -435,7 +435,7 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
         for(i=0;i<MAX_INDEX;i++){
           for(j=0;j<MAX_INDEX;j++) {
             // append all the nodes accessible via this node
-            if(rimeaddr_cmp(&(children_nodes[i][j]), &rimeaddr_null) == 0) {
+            if(linkaddr_cmp(&(children_nodes[i][j]), &linkaddr_null) == 0) {
               tmp[0] = i + '0';
               tmp[1] = '.';
               tmp[2] = j + '0';
@@ -458,15 +458,15 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
       if(timer_expired(&parent_timer)) {
         printf("LOST CONNECTION TO PARENT");
         has_parent = 0;
-        parent_node = rimeaddr_null;
+        parent_node = linkaddr_null;
         this_rank = INT_MAX;
       }
       // check if a child disconnected
       for(i=0;i<MAX_INDEX;i++){
         for(j=0;j<MAX_INDEX;j++) {
           // remove the child node
-          if(timer_expired(&(children_timer[i][j])) && rimeaddr_cmp(&(children_nodes[i][j]), &rimeaddr_null) == 0){
-            children_nodes[i][j] = rimeaddr_null;
+          if(timer_expired(&(children_timer[i][j])) && linkaddr_cmp(&(children_nodes[i][j]), &linkaddr_null) == 0){
+            children_nodes[i][j] = linkaddr_null;
           }
         }
       }

@@ -18,19 +18,34 @@ AUTOSTART_PROCESSES(&root_node_process);
 ***********************************************/
 
 // maximum number of supported children nodes
-#define MAX_CHILDREN 10
+#define MIN_INDEX 0
+#define MAX_INDEX 10
 // number of retransmissions in reliable unicast
 #define RETRANSMISSION 5
 // duration after which a node is considered as disconnected
 #define TIME_OUT 45
 
+#define NUM_HISTORY_ENTRIES 10
+
+
+static char gateway_msg[9];
+static char broadcast_msg[4];
+
+static int counter = 1;
+
+
+struct history_entry {
+  struct history_entry *next;
+  rimeaddr_t addr;
+  uint8_t seq;
+};
+LIST(history_table);
+MEMB(history_mem, struct history_entry, NUM_HISTORY_ENTRIES);
+
 
 /********************************************//**
 *  CONSTANT DEFINITIONS
 ***********************************************/
-
-// message used to tell the parent node that the node is still alive
-static const char ALIVE[] = "A";
 // the rank of the root node
 static const int rank = 0;
 
@@ -39,7 +54,7 @@ static const int rank = 0;
 ***********************************************/
 
 // list of all children nodes
-static rimeaddr_t children_nodes[MAX_CHILDREN];
+static rimeaddr_t children_nodes[MAX_INDEX][MAX_INDEX];
 // reference to this node
 static rimeaddr_t this_node;
 
@@ -48,7 +63,7 @@ static rimeaddr_t this_node;
 ***********************************************/
 
 // a timer associated to each child node
-static struct timer children_timer[MAX_CHILDREN];
+static struct timer children_timer[MAX_INDEX][MAX_INDEX];
 
 /********************************************//**
 *  Other global variables
@@ -78,8 +93,32 @@ static struct runicast_conn runicast;
 * @ return /
 */
 static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8_t seqno){
+
+  struct history_entry *e = NULL;
+  for(e = list_head(history_table); e != NULL; e = e->next) {
+    if(rimeaddr_cmp(&e->addr, from)) {
+      break;
+    }
+  }
+  if(e == NULL) {
+    /* Create new history entry */
+    e = memb_alloc(&history_mem);
+    if(e == NULL) {
+      e = list_chop(history_table); /* Remove oldest at full history */
+    }
+    rimeaddr_copy(&e->addr, from);
+    e->seq = seqno;
+    list_push(history_table, e);
+  } else {
+    /* Detect duplicate callback */
+    if(e->seq == seqno) {
+      return;
+    }
+    /* Update existing history entry */
+    e->seq = seqno;
+  }
+
   printf("%s\n", (char *) packetbuf_dataptr());
-  // TODO send it to the gateway
 }
 
 /**
@@ -93,52 +132,72 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
 static void unicast_recv(struct unicast_conn *c, const rimeaddr_t *from)
 {
   //printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
+
+  // get the indices of the sending node
+  int index1 = from-> u8[0];
+  int index2 = from-> u8[0];
+  // no valid address
+  if(index1 < MIN_INDEX || index1 > MAX_INDEX || index2 < MIN_INDEX || index2 > MAX_INDEX) {
+    return;
+  }
   // extract the message
   char *message = (char *)packetbuf_dataptr();
-  // we got a new child node
-  if(strcmp(message, ALIVE) == 0) {
+  // used as counter variable in for loops
+  const char delim[2] = "/";
+  char *token = strtok(message, delim);
+  // we received an ALIVE message
+  if(strcmp(token, "A") == 0) {
+    // get the address of the sending node
+    rimeaddr_t child_node;
+    child_node.u8[0] = from -> u8[0];
+    child_node.u8[1] = from -> u8[1];
     // check if this node is already a child of us
-    int is_child = 0;
-    int i;
-    for(i=0; i < MAX_CHILDREN; i++) {
-      // the node is already a child node -> restart timer
-      if(rimeaddr_cmp(&(children_nodes[i]), from) != 0) {
-        is_child = 1;
-        timer_restart(&(children_timer[i]));
-        break;
-      }
+    if(rimeaddr_cmp(&(children_nodes[index1][index2]), &rimeaddr_null) != 0) {
+      // the node is not a child node yet
+      // create the new child
+      children_nodes[index1][index2] = child_node;
     }
-    // else this becomes a new child node
-    if(is_child == 0) {
-      // check if we have space left
-      for(i=0; i < MAX_CHILDREN; i++) {
-        if(rimeaddr_cmp(&(children_nodes[i]), &rimeaddr_null) != 0) {
-          // create the new child
-          rimeaddr_t new_node;
-          new_node.u8[0] = from -> u8[0];
-          new_node.u8[1] = from -> u8[1];
-          children_nodes[i] = new_node;
-          timer_restart(&(children_timer[i]));
-          break;
-        }
-      }
+    // reset the timer for the new child node
+    timer_restart(&(children_timer[index1][index2]));
+    // set up the outgoing links for the children nodes of the new child
+    token = strtok(NULL, delim);
+    while(token != NULL) {
+      // we can reach the child nodes of the new node
+      index1 = token[0] - '0';
+      index2 = token[2] - '0';
+      children_nodes[index1][index2] = child_node;
+      token = strtok(NULL, delim);
+      timer_restart(&(children_timer[index1][index2]));
     }
   }
 }
 
 static int uart_rx_callback(unsigned char c){
-  if(c == 'P') {
-    config = 'P';
-  }
-  else if (c == 'O') {
-    config = 'O';
-  }
-  else {
-    return -1;
+
+  if(counter == 1) {
+    if(c == 'P') {
+      config = 'P';
+    }
+    else if (c == 'O') {
+      config = 'O';
+    }
+    else {
+      gateway_msg[counter] = c;
+      counter +=1 ;
+      if(counter > 8) {
+        counter = 1;
+        // send the message to the node
+        gateway_msg[0] = 'F';
+        int index1 = gateway_msg[1] - '0';
+        int index2 = gateway_msg[3] - '0';
+        packetbuf_clear();
+        packetbuf_copyfrom(gateway_msg, strlen(gateway_msg));
+        runicast_send(&runicast, &children_nodes[index1][index2], RETRANSMISSION);
+      }
+    }
   }
   return 0;
 }
-
 
 
 static void broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from) {
@@ -172,9 +231,10 @@ PROCESS_THREAD(root_node_process, ev, data)
   clock_init();
 
   // initialize all the timers
-  int i;
-  for(i=0;i < MAX_CHILDREN ; i++) {
-    timer_set(&(children_timer[i]), TIME_OUT*CLOCK_SECOND);
+  int i, j;
+  for(i=0;i < MAX_INDEX ; i++) {
+    for(j=0; j < MAX_INDEX; j++)
+    timer_set(&(children_timer[i][j]), TIME_OUT*CLOCK_SECOND);
   }
 
   // set our id
@@ -201,19 +261,21 @@ PROCESS_THREAD(root_node_process, ev, data)
     PROCESS_WAIT_EVENT_UNTIL(etimer_expired(&et));
 
     // create the broadcast message
-    char msg[3];
-    sprintf(msg, "O%d%c", rank, config);
+    sprintf(broadcast_msg, "O%d%c", rank, config);
     // send the broadcast message
     packetbuf_clear();
-    packetbuf_copyfrom(msg, strlen(msg));
+    packetbuf_copyfrom(broadcast_msg, strlen(broadcast_msg));
     broadcast_send(&broadcast);
 
     // check if a child disconnected
-    for(i=0;i<MAX_CHILDREN;i++){
-      if(timer_expired(&(children_timer[i]))){
-        children_nodes[i] = rimeaddr_null;
+    for(i=0;i<MAX_INDEX;i++){
+      for(j=0;j<MAX_INDEX;j++) {
+        // remove the child node
+        if(timer_expired(&(children_timer[i][j])) && rimeaddr_cmp(&(children_nodes[i][j]), &rimeaddr_null) == 0){
+          children_nodes[i][j] = rimeaddr_null;
+          }
+        }
       }
-    }
   }
 
   PROCESS_END();
