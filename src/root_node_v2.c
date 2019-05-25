@@ -194,8 +194,8 @@ static int uart_rx_callback(unsigned char c){
         counter = 1;
         // send the message to the node
         gateway_msg[0] = 'F';
-        int index1 = gateway_msg[1] - '0';
-        int index2 = gateway_msg[3] - '0';
+        int index1 = gateway_msg[1];
+        int index2 = gateway_msg[3];
         printf("message send to node: %d.%d = %s", index1, index2, gateway_msg);
         packetbuf_clear();
         packetbuf_copyfrom(gateway_msg, strlen(gateway_msg));
