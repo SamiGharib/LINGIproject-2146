@@ -24,9 +24,16 @@ public class MqttCallbackWithPrint implements MqttCallback{
     
     // Modified in order to print when a message has arrived and to track the topics still used
     public void messageArrived(String topic, MqttMessage mqttMessage) throws Exception {
-     
-      if(getName().equals("Publisher") && !topics.contains(mqttMessage.toString())){
-          topics.add(mqttMessage.toString());
+        String []tab = mqttMessage.toString().split("/");
+        String request;
+        if(tab[1].equals("Battery")){
+            request = tab[0]+"/B";
+        }
+        else{
+            request = tab[0]+"/H";
+        }
+        if(getName().equals("Publisher") && !topics.contains(request)){ 
+          topics.add(request);
       }
       else if(!getName().equals("Publisher")){
           System.out.println(getName()+ " got message: " + mqttMessage.toString() + " with topic: " + topic);
@@ -36,10 +43,8 @@ public class MqttCallbackWithPrint implements MqttCallback{
     public void deliveryComplete(IMqttDeliveryToken iMqttDeliveryToken) {
     }
     
-    public void resetTopicsCount(String topic){
-        if(topics.contains(topic)){
-            topics.remove(topic);
-        }
+    public void resetTopicsCount(){
+        topics.clear();
     }
     
     public ArrayList<String> getTopics(){
