@@ -174,7 +174,8 @@ static void unicast_recv(struct unicast_conn *c, const rimeaddr_t *from)
 
 static int uart_rx_callback(unsigned char c){
 
-  if(counter == 1) {
+  if(counter == 1)
+  {
     if(c == 'P') {
       config = 'P';
     }
@@ -184,18 +185,23 @@ static int uart_rx_callback(unsigned char c){
     else {
       gateway_msg[counter] = c;
       counter +=1 ;
+    }
+  }
+  else {
+      gateway_msg[counter] = c;
+      counter +=1 ;
       if(counter > 8) {
         counter = 1;
         // send the message to the node
         gateway_msg[0] = 'F';
         int index1 = gateway_msg[1] - '0';
         int index2 = gateway_msg[3] - '0';
+        printf("message send to node: %d.%d = %s", index1, index2, gateway_msg);
         packetbuf_clear();
         packetbuf_copyfrom(gateway_msg, strlen(gateway_msg));
         runicast_send(&runicast, &children_nodes[index1][index2], RETRANSMISSION);
       }
     }
-  }
   return 0;
 }
 
@@ -281,4 +287,3 @@ PROCESS_THREAD(root_node_process, ev, data)
   PROCESS_END();
 }
 /*---------------------------------------------------------------------------*/
-
