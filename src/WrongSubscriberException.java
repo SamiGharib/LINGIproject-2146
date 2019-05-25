@@ -10,7 +10,7 @@ class WrongSubscriberException extends Exception{
       }
       else if(flag == 2){
           //Wrong topic field
-          System.out.println("Available Topics : \"Temperature\" and \"Humidity\"");
+          System.out.println("Available Topics : \"Battery\" and \"Humidity\"");
       }
       else if(flag == 3){
           System.out.println("You subscribed more than once to the same topic");

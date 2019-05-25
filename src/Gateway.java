@@ -55,11 +55,18 @@ public class Gateway {
                 String line;
                 try {
                     while ((line = input.readLine()) != null) {
-                        String[] data = line.split("/"); //Messages from nodes have the form "ID/Temperature(Humidity)/value"
-                        String topic = data[0]+"/"+data[1]; //nodeID/Temperature
+                        String[] data = line.split("/"); //Messages from nodes have the form "ID/Battery(Humidity)/value"
+                        String sensed = "wrongdata";
+                        if(data[1].equals("B")){
+                            sensed = "Battery";
+                        }
+                        else if(data[1].equals("H")){
+                            sensed = "Humidity";
+                        }
+                        String topic = data[0]+"/"+sensed; //nodeID/Battery
                         String value = data[2]; //value
                         MqttMessage msg = new MqttMessage();
-                        if(data[1].equals("Temperature") || data[1].equals("Humidity")){
+                        if(sensed.equals("Battery") || sensed.equals("Humidity")){
                             msg.setPayload(value.getBytes());
                             gateway.publish(topic, msg);
                             //System.out.println("Published to subcribers: "+line);
@@ -67,6 +74,7 @@ public class Gateway {
                         }
                         else{
                             System.out.println("Wrong message received: "+line);
+                            callback.resetTopicsCount(topic);
                         }
                     }
                     input.close();
@@ -120,8 +128,9 @@ public class Gateway {
                             output.write(request);
                             output.flush();
                             //System.out.println(request + " has been sent to root node");
+                            callback.resetTopicsCount(request);
                         }                        
-                        Thread.sleep(5000); // wait 5 seconds for count to refill
+                        Thread.sleep(30000); // wait 5 seconds for count to refill
                     }
                 } catch (Exception e) {
                     System.out.println(e.getMessage());

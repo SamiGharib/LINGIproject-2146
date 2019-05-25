@@ -15,7 +15,7 @@ public class Subscriber {
         String[] test;
         for(int i = 1; i<args.length;i++){
             test = args[i].split("/");
-            if(!test[1].equals("Temperature") && !test[1].equals("Humidity")){
+            if(!test[1].equals("Battery") && !test[1].equals("Humidity")){
                 throw new WrongSubscriberException(2);
             }
             for(int j = 1; j<args.length; j++){
@@ -44,7 +44,7 @@ public class Subscriber {
                     msg.setPayload(args[i].getBytes());
                     subscriber.publish("Topic", msg);
 		    System.out.println(subscriberName + " published " + msg.toString());
-                    Thread.sleep(2500);
+                    Thread.sleep(30000);
                 }
             }
         } catch (Exception e) {

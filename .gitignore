@@ -5,3 +5,7 @@ obj_z1/
 *.z1
 symbols.c
 symbols.h
+/nbproject/private/
+/LINGI2146-project/LINGI2146-project/build/
+/LINGI2146-project/LINGI2146-project/dist/
+/LINGI2146-project/LINGI2146-project/nbproject/private/
