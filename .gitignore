@@ -1,0 +1,7 @@
+*.a
+*.map
+Makefile
+obj_z1/
+*.z1
+symbols.c
+symbols.h
