@@ -1,12 +1,14 @@
 #include "contiki.h"
 #include "dev/leds.h"
-#include "dev/button-sensor.h"
 #include <stdio.h>
 #include <stdlib.h>
 #include "net/rime/rime.h"
 #include "random.h"
 #include <string.h>
 #include "sys/timer.h"
+#include "uart0.h"
+#include "dev/cc2420/cc2420.h"
+
 
 PROCESS(root_node_process, "Root node");
 AUTOSTART_PROCESSES(&root_node_process);
@@ -76,7 +78,7 @@ static struct runicast_conn runicast;
 * @ return /
 */
 static void runicast_recv(struct runicast_conn *c, const linkaddr_t *from, uint8_t seqno){
-  printf("runicast message received from %d.%d -> %s\n", from->u8[0], from->u8[1], (char *) packetbuf_dataptr());
+  printf("%s\n", (char *) packetbuf_dataptr());
   // TODO send it to the gateway
 }
 
@@ -90,7 +92,7 @@ static void runicast_recv(struct runicast_conn *c, const linkaddr_t *from, uint8
 */
 static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
 {
-  printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
+  //printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
   // extract the message
   char *message = (char *)packetbuf_dataptr();
   // we got a new child node
@@ -123,6 +125,20 @@ static void unicast_recv(struct unicast_conn *c, const linkaddr_t *from)
     }
   }
 }
+
+static int uart_rx_callback(unsigned char c){
+  if(c == 'P') {
+    config = 'P';
+  }
+  else if (c == 'O') {
+    config = 'O';
+  }
+  else {
+    return -1;
+  }
+  return 0;
+}
+
 
 
 static void broadcast_recv(struct broadcast_conn *c, const linkaddr_t *from) {
@@ -172,6 +188,9 @@ PROCESS_THREAD(root_node_process, ev, data)
   // Set up an identified reliable unicast connection
   runicast_open(&runicast, 144, &runicast_call);
 
+  // create a connection with the gateway via usb
+  uart0_init(BAUD2UBR(115200));
+  uart0_set_input(uart_rx_callback);
 
 
   // Main loop
