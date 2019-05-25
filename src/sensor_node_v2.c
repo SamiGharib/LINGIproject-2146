@@ -78,7 +78,7 @@ static char config = 'P';
 static int prev_temp[2] = {1, 1};
 static int prev_bat = 0;
 // is there a subscriber for a given channel?: 0 -> no subscriber | 1 -> subscriber
-static int temp_subscriber = 1;
+static int temp_subscriber = 0;
 static int bat_subscriber = 0;
 
 static char alive_msg[500];
@@ -331,7 +331,7 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
 
   if(message[0] == 'F') {
 
-    int index1 = message[1] - '0'; // msg[1] - '0'?
+    int index1 = message[1] - '0'; 
     int index2 = message[3] - '0';
 
     if(this_node.u8[0] == index1 && this_node.u8[1] == index2) {
@@ -445,7 +445,6 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
           }
         }
 
-        //printf("send alive message: %s\n", alive_msg);
         packetbuf_clear();
         packetbuf_copyfrom(alive_msg, strlen(alive_msg));
         unicast_send(&unicast, &parent_node);

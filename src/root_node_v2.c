@@ -65,6 +65,7 @@ static rimeaddr_t this_node;
 // a timer associated to each child node
 static struct timer children_timer[MAX_INDEX][MAX_INDEX];
 
+
 /********************************************//**
 *  Other global variables
 ***********************************************/
@@ -135,10 +136,9 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
 static void unicast_recv(struct unicast_conn *c, const rimeaddr_t *from)
 {
   //printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
-  printf("%s\n", (char *) packetbuf_dataptr());
   // get the indices of the sending node
   int index1 = from-> u8[0];
-  int index2 = from-> u8[0];
+  int index2 = from-> u8[1];
   // no valid address
   if(index1 < MIN_INDEX || index1 > MAX_INDEX || index2 < MIN_INDEX || index2 > MAX_INDEX) {
     return;
@@ -283,6 +283,7 @@ PROCESS_THREAD(root_node_process, ev, data)
     packetbuf_clear();
     packetbuf_copyfrom(broadcast_msg, strlen(broadcast_msg));
     broadcast_send(&broadcast);
+   
 
     // check if a child disconnected
     for(i=0;i<MAX_INDEX;i++){
