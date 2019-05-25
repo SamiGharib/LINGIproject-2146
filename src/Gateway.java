@@ -61,13 +61,13 @@ public class Gateway {
                         if(data[1].equals("B")){
                             sensed = "Battery";
                         }
-                        else if(data[1].equals("H")){
-                            sensed = "Humidity";
+                        else if(data[1].equals("T")){
+                            sensed = "Temperature";
                         }
                         String topic = data[0]+"/"+sensed; //nodeID/Battery
                         String value = data[2]; //value
                         MqttMessage msg = new MqttMessage();
-                        if(sensed.equals("Battery") || sensed.equals("Humidity")){
+                        if(sensed.equals("Battery") || sensed.equals("Temperature")){
                             msg.setPayload(value.getBytes());
                             gateway.publish(topic, msg);
                             System.out.println("Published to subcribers: "+line);

@@ -15,7 +15,7 @@ public class Subscriber {
         String[] test;
         for(int i = 1; i<args.length;i++){
             test = args[i].split("/");
-            if(!test[1].equals("Battery") && !test[1].equals("Humidity")){
+            if(!test[1].equals("Battery") && !test[1].equals("Temperature")){
                 throw new WrongSubscriberException(2);
             }
             for(int j = 1; j<args.length; j++){

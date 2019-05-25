@@ -30,7 +30,7 @@ public class MqttCallbackWithPrint implements MqttCallback{
             request = tab[0]+"/B";
         }
         else{
-            request = tab[0]+"/H";
+            request = tab[0]+"/T";
         }
         if(getName().equals("Publisher") && !topics.contains(request)){ 
           topics.add(request);
