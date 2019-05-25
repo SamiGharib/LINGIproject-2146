@@ -44,8 +44,8 @@ public class Subscriber {
                     msg.setPayload(args[i].getBytes());
                     subscriber.publish("Topic", msg);
 		    System.out.println(subscriberName + " published " + msg.toString());
-                    Thread.sleep(30000);
                 }
+                Thread.sleep(15000);
             }
         } catch (Exception e) {
             e.printStackTrace();

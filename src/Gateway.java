@@ -22,6 +22,7 @@ public class Gateway {
     public static final String SERIALDUMP_LINUX = "/home/user/contiki/tools/sky/serialdump-linux"; //See ex session with hardware
     private Process serialDumpProcess;
     private ArrayList<String> topics;
+    private ArrayList<String> previousTopics = new ArrayList<>();
     
     public Gateway(String port)
     {
@@ -69,12 +70,10 @@ public class Gateway {
                         if(sensed.equals("Battery") || sensed.equals("Humidity")){
                             msg.setPayload(value.getBytes());
                             gateway.publish(topic, msg);
-                            //System.out.println("Published to subcribers: "+line);
-                            callback.resetTopicsCount(topic); //Remove a topic from topics to be traeted once it has been sent in order to stop requiring when there is no subscriber
+                            System.out.println("Published to subcribers: "+line);
                         }
                         else{
                             System.out.println("Wrong message received: "+line);
-                            callback.resetTopicsCount(topic);
                         }
                     }
                     input.close();
@@ -123,14 +122,28 @@ public class Gateway {
                 try {
                     while(true) {
                         topics = callback.getTopics();
-                        for(int i=0;i<topics.size();i++){
-                            String request = topics.get(i);
-                            output.write(request);
-                            output.flush();
-                            //System.out.println(request + " has been sent to root node");
-                            callback.resetTopicsCount(request);
-                        }                        
-                        Thread.sleep(30000); // wait 5 seconds for count to refill
+                        for(int i =0; i<previousTopics.size();i++){
+                            String s = previousTopics.get(i);
+                            if(!topics.contains(s)){
+                                String stopSend = s+"/0";
+                                output.write(stopSend);
+                                output.flush();
+                                //System.out.println(stopSend + " has been sent to root node");
+                            }
+                        }
+                        for(int i =0; i<topics.size();i++){
+                            String s = topics.get(i);
+                            if(!previousTopics.contains(s)){
+                                String startSend = s+"/1";
+                                output.write(startSend);
+                                output.flush();
+                                //System.out.println(startSend + " has been sent to root node");
+                            }
+                        }
+                        previousTopics = (ArrayList<String>) topics.clone();
+                        callback.resetTopicsCount();
+                        //System.out.println("New comm");
+                        Thread.sleep(30000); // wait 30 seconds to be sure that all subscribers are treated in the topics filling
                     }
                 } catch (Exception e) {
                     System.out.println(e.getMessage());
