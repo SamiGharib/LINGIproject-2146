@@ -1,5 +1,5 @@
 /*
- * This implements a Subcribers
+ * This implements a Subcribers than is run from command line
  * Input : String subscriber name String Topic1 String Topic2 (if any)
  */
 import org.eclipse.paho.client.mqttv3.MqttClient;

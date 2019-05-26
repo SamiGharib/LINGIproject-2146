@@ -5,8 +5,7 @@ http://courses.cs.tau.ac.il/embedded/contiki-2.3/examples/sky-shell/src/se/sics/
  */
 
 /**
- *
- * @author sami
+ *The Gateway is run from command line with the command java Gateway /dev/ttyUSBX where ttUSBX contains the root_node code
  */
 import java.io.BufferedReader;
 import java.io.BufferedWriter;
@@ -68,11 +67,13 @@ public class Gateway {
                         String topic = data[0]+"/"+sensed; //nodeID/Battery
                         String value = data[2]; //value
                         MqttMessage msg = new MqttMessage();
+                        //If it receives informations about Battery or Temperature, it sends it to the subscribers
                         if(sensed.equals("Battery") || sensed.equals("Temperature")){
                             msg.setPayload(value.getBytes());
                             gateway.publish(topic, msg);
                             //System.out.println("Published to subcribers: "+line);
                         }
+                        // else does nothing
                         else{
                             //System.out.println("Wrong message received: "+line);
                         }
@@ -97,11 +98,13 @@ public class Gateway {
                         while((config = scan.nextLine()) == null){
                             // Waits for an input from user
                         }
+                        //If user prints P on cmd line, the data will be received periodically from the root node
                         if(config.equals("P")){
                             output.write("P");
                             output.flush();
                             System.out.println("Data will be sent periodically");
                         }
+                        //Else if user prints O on cmd line, the data will be received on change from the root node
                         else if(config.equals("O")){
                             output.write("O");
                             output.flush();
@@ -117,7 +120,7 @@ public class Gateway {
                 }
                 }
       }, "send configuration thread");
-            
+             // Here, the topics are updated in order to tell the root node what informations are needed only when it is necessary
             Thread optimization = new Thread(new Runnable() {
                 public void run() {
                 try {

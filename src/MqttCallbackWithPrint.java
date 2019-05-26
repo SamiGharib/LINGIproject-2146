@@ -27,6 +27,7 @@ public class MqttCallbackWithPrint implements MqttCallback{
     public void messageArrived(String topic, MqttMessage mqttMessage) throws Exception {
         String []tab = mqttMessage.toString().split("/");
         String request;
+        //The publisher fills in the topics to always have them
         if(getName().equals("Publisher")){
             if(tab[1].equals("Battery")){
             request = tab[0]+"/B";
