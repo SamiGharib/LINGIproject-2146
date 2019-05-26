@@ -176,10 +176,7 @@ static void unicast_recv(struct unicast_conn *c, const rimeaddr_t *from)
 }
 
 static int uart_rx_callback(unsigned char c){
-
-  // ignore non valid character
-  if(c > 32) {
-
+  //printf("receivedfromgateway/=/-%c\n",c);
     // start of the message
     if(counter == 1) {
       if(c == 'P') {
@@ -188,56 +185,33 @@ static int uart_rx_callback(unsigned char c){
       else if (c == 'O') {
         config = 'O';
       }
-      // character is a digit
-      else if (c >= 48 && c <= 57) {
+      else{
+	gateway_msg[counter] = c;
+	index1 = c - '0';
+	counter++;
+      }
+     }      
+    // character is a digit
+     else{
         gateway_msg[counter] = c;
-        index1 = c - '0';
-        counter++;
-      }
-    }
-    else {
-      // character is a .
-      if(counter == 2 && c == 46) {
-        gateway_msg[counter] = c;
-        counter++;
-      }
-      else if(counter == 3 && (c >= 48 && c <= 57)) {
-        gateway_msg[counter] = c;
-        index2 = c - '0';
-        counter++;
-      }
-      else if(counter == 4 && c == '/') {
-        gateway_msg[counter] = c;
-        counter++;
-      }
-      else if(counter == 5 && (c >= 64 && c <= 122)) {
-        gateway_msg[counter] = c;
-        counter++;
-      }
-      else if(counter == 6 && c == '/') {
-        gateway_msg[counter] = c;
-        counter++;
-      }
-      else if(counter == 7 && (c >= 48 && c <= 57)) {
-        gateway_msg[counter] = c;
-        counter++;
-      }
-      else {
-        counter = 1;
-      }
+	if(counter == 3){
+	 index2 = c - '0';
+	}
+	counter++;
+	if(counter == 8){
+	 // send the message to the node
+       	 packetbuf_clear();
+       	 packetbuf_copyfrom(gateway_msg, strlen(gateway_msg));
+	 //printf("msg_gateway=%s\n",gateway_msg);
+       	 //printf("[Remove if OK]/message/ send to %d.%d via interface: %d.%d\n", index1, index2, children_nodes[index1][index2].u8[0], children_nodes[index1][index2].u8[1]);
+      	runicast_send(&runicast, &children_nodes[index1][index2], RETRANSMISSION);
+	counter = 1;
+	}
+     }
 
-      if(counter > 8) {
-        counter = 1;
-        // send the message to the node
-        packetbuf_clear();
-        packetbuf_copyfrom(gateway_msg, strlen(gateway_msg));
-        printf("[Remove if OK] message send to %d.%d via interface: %d.%d\n", index1, index2, children_nodes[index1][index2].u8[0], children_nodes[index1][index2].u8[1]);
-        runicast_send(&runicast, &children_nodes[index1][index2], RETRANSMISSION);
-      }
-    }
-  }
   return 0;
 }
+
 
 
 static void broadcast_recv(struct broadcast_conn *c, const rimeaddr_t *from) {

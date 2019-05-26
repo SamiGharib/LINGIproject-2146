@@ -45,6 +45,7 @@ public class Subscriber {
                     subscriber.publish("Topic", msg);
 		    System.out.println(subscriberName + " published " + msg.toString());
                 }
+                System.out.println("New comm");
                 Thread.sleep(15000);
             }
         } catch (Exception e) {

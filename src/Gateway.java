@@ -57,6 +57,7 @@ public class Gateway {
                 try {
                     while ((line = input.readLine()) != null) {
                         String[] data = line.split("/"); //Messages from nodes have the form "ID/Battery(Humidity)/value"
+                        System.out.println("received from root: "+ line);
                         String sensed = "wrongdata";
                         if(data[1].equals("B")){
                             sensed = "Battery";
@@ -128,7 +129,7 @@ public class Gateway {
                                 String stopSend = s+"/0";
                                 output.write(stopSend);
                                 output.flush();
-                                //System.out.println(stopSend + " has been sent to root node");
+                                System.out.println(stopSend + " has been sent to root node");
                             }
                         }
                         for(int i =0; i<topics.size();i++){
@@ -137,12 +138,12 @@ public class Gateway {
                                 String startSend = s+"/1";
                                 output.write(startSend);
                                 output.flush();
-                                //System.out.println(startSend + " has been sent to root node");
+                                System.out.println(startSend + " has been sent to root node");
                             }
                         }
                         previousTopics = (ArrayList<String>) topics.clone();
                         callback.resetTopicsCount();
-                        //System.out.println("New comm");
+                        System.out.println("New comm");
                         Thread.sleep(30000); // wait 30 seconds to be sure that all subscribers are treated in the topics filling
                     }
                 } catch (Exception e) {
