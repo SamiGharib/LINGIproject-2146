@@ -80,6 +80,9 @@ static struct broadcast_conn broadcast;
 static struct unicast_conn unicast;
 static struct runicast_conn runicast;
 
+static int index1 = 0;
+static int index2 = 0;
+
 /********************************************//**
 *  Function definitions
 ***********************************************/
@@ -174,34 +177,65 @@ static void unicast_recv(struct unicast_conn *c, const rimeaddr_t *from)
 
 static int uart_rx_callback(unsigned char c){
 
-  if(counter == 1)
-  {
-    if(c == 'P') {
-      config = 'P';
-    }
-    else if (c == 'O') {
-      config = 'O';
+  // ignore non valid character
+  if(c > 32) {
+
+    // start of the message
+    if(counter == 1) {
+      if(c == 'P') {
+        config = 'P';
+      }
+      else if (c == 'O') {
+        config = 'O';
+      }
+      // character is a digit
+      else if (c >= 48 && c <= 57) {
+        gateway_msg[counter] = c;
+        index1 = c - '0';
+        counter++;
+      }
     }
     else {
-      gateway_msg[counter] = c;
-      counter +=1 ;
-    }
-  }
-  else {
-      gateway_msg[counter] = c;
-      counter +=1 ;
+      // character is a .
+      if(counter == 2 && c == 46) {
+        gateway_msg[counter] = c;
+        counter++;
+      }
+      else if(counter == 3 && (c >= 48 && c <= 57)) {
+        gateway_msg[counter] = c;
+        index2 = c - '0';
+        counter++;
+      }
+      else if(counter == 4 && c == '/') {
+        gateway_msg[counter] = c;
+        counter++;
+      }
+      else if(counter == 5 && (c >= 64 && c <= 122)) {
+        gateway_msg[counter] = c;
+        counter++;
+      }
+      else if(counter == 6 && c == '/') {
+        gateway_msg[counter] = c;
+        counter++;
+      }
+      else if(counter == 7 && (c >= 48 && c <= 57)) {
+        gateway_msg[counter] = c;
+        counter++;
+      }
+      else {
+        counter = 1;
+      }
+
       if(counter > 8) {
         counter = 1;
         // send the message to the node
-        gateway_msg[0] = 'F';
-        int index1 = gateway_msg[1];
-        int index2 = gateway_msg[3];
-        printf("message send to node: %d.%d = %s", index1, index2, gateway_msg);
         packetbuf_clear();
         packetbuf_copyfrom(gateway_msg, strlen(gateway_msg));
+        printf("[Remove if OK] message send to %d.%d via interface: %d.%d\n", index1, index2, children_nodes[index1][index2].u8[0], children_nodes[index1][index2].u8[1]);
         runicast_send(&runicast, &children_nodes[index1][index2], RETRANSMISSION);
       }
     }
+  }
   return 0;
 }
 
@@ -253,6 +287,9 @@ PROCESS_THREAD(root_node_process, ev, data)
   unicast_open(&unicast, 136, &unicast_call);
   // Set up an identified reliable unicast connection
   runicast_open(&runicast, 144, &runicast_call);
+
+  gateway_msg[0] = 'F';
+
 
   // create a connection with the gateway via usb
   uart0_init(BAUD2UBR(115200));
