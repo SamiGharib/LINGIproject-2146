@@ -13,7 +13,7 @@
 PROCESS(root_node_process, "Root node");
 AUTOSTART_PROCESSES(&root_node_process);
 
-/********************************************//**
+/********************************************//*
 *  MACRO DEFINITIONS
 ***********************************************/
 

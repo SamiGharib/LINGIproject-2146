@@ -14,7 +14,7 @@
 PROCESS(sensor_node_process, "Sensor node");
 AUTOSTART_PROCESSES(&sensor_node_process);
 
-/********************************************//**
+/********************************************//*
 *  MACRO DEFINITIONS
 ***********************************************/
 
