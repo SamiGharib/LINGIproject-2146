@@ -135,7 +135,7 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
 static void unicast_recv(struct unicast_conn *c, const rimeaddr_t *from)
 {
   //printf("unicast message received from %d.%d: '%s'\n", from->u8[0], from->u8[1], (char *)packetbuf_dataptr());
-
+  printf("%s\n", (char *) packetbuf_dataptr());
   // get the indices of the sending node
   int index1 = from-> u8[0];
   int index2 = from-> u8[0];
@@ -190,7 +190,7 @@ static int uart_rx_callback(unsigned char c){
 	index1 = c - '0';
 	counter++;
       }
-     }      
+     }
     // character is a digit
      else{
         gateway_msg[counter] = c;

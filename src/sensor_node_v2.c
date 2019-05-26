@@ -25,7 +25,7 @@ AUTOSTART_PROCESSES(&sensor_node_process);
 // duration after which a node is considered as disconnected
 #define TIME_OUT 45
 // duration after which the node sends data -> when config = periodically
-#define DATA_TIME 30
+#define DATA_TIME 20
 
 #define NUM_HISTORY_ENTRIES 10
 
@@ -78,7 +78,7 @@ static char config = 'P';
 static int prev_temp[2] = {1, 1};
 static int prev_bat = 0;
 // is there a subscriber for a given channel?: 0 -> no subscriber | 1 -> subscriber
-static int temp_subscriber = 0;
+static int temp_subscriber = 1;
 static int bat_subscriber = 0;
 
 static char alive_msg[500];
@@ -473,4 +473,3 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
     }
     PROCESS_END();
   }
-
