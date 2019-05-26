@@ -331,7 +331,7 @@ static void runicast_recv(struct runicast_conn *c, const rimeaddr_t *from, uint8
 
   if(message[0] == 'F') {
 
-    int index1 = message[1] - '0'; 
+    int index1 = message[1] - '0';
     int index2 = message[3] - '0';
 
     if(this_node.u8[0] == index1 && this_node.u8[1] == index2) {
