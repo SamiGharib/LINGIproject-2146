@@ -57,7 +57,7 @@ public class Gateway {
                 try {
                     while ((line = input.readLine()) != null) {
                         String[] data = line.split("/"); //Messages from nodes have the form "ID/Battery(Humidity)/value"
-                        System.out.println("received from root: "+ line);
+                        //System.out.println("received from root: "+ line);
                         String sensed = "wrongdata";
                         if(data[1].equals("B")){
                             sensed = "Battery";
@@ -71,10 +71,10 @@ public class Gateway {
                         if(sensed.equals("Battery") || sensed.equals("Temperature")){
                             msg.setPayload(value.getBytes());
                             gateway.publish(topic, msg);
-                            System.out.println("Published to subcribers: "+line);
+                            //System.out.println("Published to subcribers: "+line);
                         }
                         else{
-                            System.out.println("Wrong message received: "+line);
+                            //System.out.println("Wrong message received: "+line);
                         }
                     }
                     input.close();
@@ -130,6 +130,7 @@ public class Gateway {
                                 output.write(stopSend);
                                 output.flush();
                                 System.out.println(stopSend + " has been sent to root node");
+                                Thread.sleep(15000);
                             }
                         }
                         for(int i =0; i<topics.size();i++){
@@ -139,6 +140,7 @@ public class Gateway {
                                 output.write(startSend);
                                 output.flush();
                                 System.out.println(startSend + " has been sent to root node");
+                                Thread.sleep(15000);
                             }
                         }
                         previousTopics = (ArrayList<String>) topics.clone();

@@ -19,22 +19,26 @@ public class MqttCallbackWithPrint implements MqttCallback{
     }
     
     public void connectionLost(Throwable throwable) {
-      System.out.println(getName() + " lost connection to broker");
+        
+      System.out.println(getName() + " lost connection to broker "+throwable.getCause().getMessage());
     }
     
     // Modified in order to print when a message has arrived and to track the topics still used
     public void messageArrived(String topic, MqttMessage mqttMessage) throws Exception {
         String []tab = mqttMessage.toString().split("/");
         String request;
-        if(tab[1].equals("Battery")){
+        if(getName().equals("Publisher")){
+            if(tab[1].equals("Battery")){
             request = tab[0]+"/B";
+            }
+            else{
+                request = tab[0]+"/T";
+            }
+            if(!topics.contains(request)){ 
+                topics.add(request);
+            }
         }
-        else{
-            request = tab[0]+"/T";
-        }
-        if(getName().equals("Publisher") && !topics.contains(request)){ 
-          topics.add(request);
-      }
+        
       else if(!getName().equals("Publisher")){
           System.out.println(getName()+ " got message: " + mqttMessage.toString() + " with topic: " + topic);
       }
